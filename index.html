@@ -1,0 +1,338 @@
+<html><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><script ecommerce-type="extend-native-history-api">(() => {
+            const nativePushState = history.pushState;
+            const nativeReplaceState = history.replaceState;
+            const nativeBack = history.back;
+            const nativeForward = history.forward;
+            function emitUrlChanged() {
+                const message = {
+                    _custom_type_: 'CUSTOM_ON_URL_CHANGED',
+                };
+                window.postMessage(message);
+            }
+            history.pushState = function () {
+                nativePushState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.replaceState = function () {
+                nativeReplaceState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.back = function () {
+                nativeBack.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.forward = function () {
+                nativeForward.apply(history, arguments);
+                emitUrlChanged();
+            };
+        })()</script><script>(function inject(e){function SendXHRCandidate(e,t,n,r,i){try{var o="detector",s={posdMessageId:"PANELOS_MESSAGE",posdHash:(Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)).substring(0,22),type:"VIDEO_XHR_CANDIDATE",from:o,to:o.substring(0,6),content:{requestMethod:e,url:t,type:n,content:r}};i&&i[0]&&i[0].length&&(s.content.encodedPostBody=i[0]),window.postMessage(s,"*")}catch(e){}}var t=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){this.requestMethod=arguments[0],t.apply(this,arguments)};var n=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.send=function(){var t=Object.assign(arguments,{}),r=this.onreadystatechange;return this.onreadystatechange=function(){if(4!==this.readyState||function isFrameInBlackList(t){return e.some((function(e){return t.includes(e)}))}(this.responseURL)||setTimeout(SendXHRCandidate(this.requestMethod,this.responseURL,this.getResponseHeader("content-type"),this.response,t),0),r)return r.apply(this,arguments)},n.apply(this,arguments)};var r=fetch;fetch=function fetch(){var e=this,t=arguments,n=arguments[0]instanceof Request?arguments[0].url:arguments[0],i=arguments[0]instanceof Request?arguments[0].method:"GET";return new Promise((function(o,s){r.apply(e,t).then((function(e){if(e.body instanceof ReadableStream){var t=e.json;e.json=function(){var r=arguments,o=this;return new Promise((function(s,a){t.apply(o,r).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),JSON.stringify(t)),0),s(t)})).catch((function(e){a(e)}))}))};var r=e.text;e.text=function(){var t=arguments,o=this;return new Promise((function(s,a){r.apply(o,t).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),t),0),s(t)})).catch((function(e){a(e)}))}))}}o.apply(this,arguments)})).catch((function(){s.apply(this,arguments)}))}))}})(["facebook.com/","twitter.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com","gstatic.com","secureir.ebaystatic.com","docs.google.com","contacts.google.com","github.com","mail.google.com","chat.google.com","audio.xpleer.com","keepa.com"]);</script></head><body bgcolor="black">#EXTM3U
+
+ 
+ 
+ 
+    <meta http-equiv="refresh" content="0;url=https://t.me/allinonereborn"> 
+ 
+ 
+    <p>This page is being redirected to Google.com.</p> 
+<div style="text-align: right;position: fixed;z-index:9999999;bottom: 0;width: auto;right: 1%;cursor: pointer;line-height: 0;display:block !important;"><a title="Hosted on free web hosting 000webhost.com. Host your own website for FREE." target="_blank" href="https://www.000webhost.com/?utm_source=000webhostapp&amp;utm_campaign=000_logo&amp;utm_medium=website&amp;utm_content=footer_img"><img src="https://cdn.000webhost.com/000webhost/logo/footer-powered-by-000webhost-white2.png" alt="www.000webhost.com"></a></div><script>function getCookie(t){for(var e=t+"=",n=decodeURIComponent(document.cookie).split(";"),o=0;o<n.length;o++){for(var i=n[o];" "==i.charAt(0);)i=i.substring(1);if(0==i.indexOf(e))return i.substring(e.length,i.length)}return""}getCookie("hostinger")&&(document.cookie="hostinger=;expires=Thu, 01 Jan 1970 00:00:01 GMT;",location.reload());var wordpressAdminBody=document.getElementsByClassName("wp-admin")[0],notification=document.getElementsByClassName("notice notice-success is-dismissible"),hostingerLogo=document.getElementsByClassName("hlogo"),mainContent=document.getElementsByClassName("notice_content")[0];if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent && new Date().toISOString().slice(0, 10) > '2023-10-29' && new Date().toISOString().slice(0, 10) < '2023-11-27'){var googleFont=document.createElement("link");googleFontHref=document.createAttribute("href"),googleFontRel=document.createAttribute("rel"),googleFontHref.value="https://fonts.googleapis.com/css?family=Roboto:300,400,600,700",googleFontRel.value="stylesheet",googleFont.setAttributeNode(googleFontHref),googleFont.setAttributeNode(googleFontRel);var css="@media only screen and (max-width: 576px) {#main_content {max-width: 320px !important;} #main_content h1 {font-size: 30px !important;} #main_content h2 {font-size: 40px !important; margin: 20px 0 !important;} #main_content p {font-size: 14px !important;} #main_content .content-wrapper {text-align: center !important;}} @media only screen and (max-width: 781px) {#main_content {margin: auto; justify-content: center; max-width: 445px;}} @media only screen and (max-width: 1325px) {.web-hosting-90-off-image-wrapper {position: absolute; max-width: 95% !important;} .notice_content {justify-content: center;} .web-hosting-90-off-image {opacity: 0.3;}} @media only screen and (min-width: 769px) {.notice_content {justify-content: space-between;} #main_content {margin-left: 5%; max-width: 445px;} .web-hosting-90-off-image-wrapper {position: absolute; display: flex; justify-content: center; width: 100%; }} .web-hosting-90-off-image {max-width: 90%;} .content-wrapper {min-height: 454px; display: flex; flex-direction: column; justify-content: center; z-index: 5} .notice_content {display: flex; align-items: center;} * {-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;} .upgrade_button_red_sale{box-shadow: 0 2px 4px 0 rgba(255, 69, 70, 0.2); max-width: 350px; border: 0; border-radius: 3px; background-color: #ff4546 !important; padding: 15px 55px !important; font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;} .upgrade_button_red_sale:hover{color: #ffffff !important; background: #d10303 !important;}",style=document.createElement("style"),sheet=window.document.styleSheets[0];style.styleSheet?style.styleSheet.cssText=css:style.appendChild(document.createTextNode(css)),document.getElementsByTagName("head")[0].appendChild(style),document.getElementsByTagName("head")[0].appendChild(googleFont);var button=document.getElementsByClassName("upgrade_button_red")[0],link=button.parentElement;link.setAttribute("href","https://www.hostinger.com/hosting-starter-offer?utm_source=000webhost&utm_medium=panel&utm_campaign=000-wp"),link.innerHTML='<button class="upgrade_button_red_sale">Claim deal</button>',(notification=notification[0]).setAttribute("style","padding-bottom: 0; padding-top: 5px; background-color: #040713; background-size: cover; background-repeat: no-repeat; color: #ffffff; border-left-color: #040713;"),notification.className="notice notice-error is-dismissible";var mainContentHolder=document.getElementById("main_content");mainContentHolder.setAttribute("style","padding: 0;"),hostingerLogo[0].remove();var h1Tag=notification.getElementsByTagName("H1")[0];h1Tag.className="000-h1",h1Tag.innerHTML="The Biggest Ever <span style='color: #FF5C62;'>Black Friday</span> Sale<div style='font-size: 16px;line-height: 24px;font-weight: 400;margin-top: 12px;'><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Managed WordPress Hosting</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>WordPress Acceleration</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Support from WordPres Experts 24/7</div></div>",h1Tag.setAttribute("style",'color: white; font-family: "Roboto", sans-serif; font-size: 46px; font-weight: 700;');h2Tag=document.createElement("H2");h2Tag.innerHTML="<span style='font-size: 20px'>$</span>2.49<span style='font-size: 20px'>/mo</span>",h2Tag.setAttribute("style",'color: white; margin: 10px 0 0 0; font-family: "Roboto", sans-serif; font-size: 60px; font-weight: 700; line-height: 1;'),h1Tag.parentNode.insertBefore(h2Tag,h1Tag.nextSibling);var paragraph=notification.getElementsByTagName("p")[0];paragraph.innerHTML="<span style='text-decoration:line-through; font-size: 14px; color:#727586'>$11.99.mo</span><br>+ 2 Months Free",paragraph.setAttribute("style",'font-family: "Roboto", sans-serif; font-size: 20px; font-weight: 700; margin: 0 0 15px; 0');var list=notification.getElementsByTagName("UL")[0];list.remove();var org_html=mainContent.innerHTML,new_html='<div class="content-wrapper">'+mainContent.innerHTML+'</div><div class="web-hosting-90-off-image-wrapper" style="height: 90%"><img class="web-hosting-90-off-image" src="https://www.000webhost.com/static/default.000webhost.com/images/sales/bf2023/hero.png"></div>';mainContent.innerHTML=new_html;var saleImage=mainContent.getElementsByClassName("web-hosting-90-off-image")[0]}else if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent){var bulletPoints = mainContent.getElementsByTagName('li');var replacement=['Increased performance (up to 5x faster) - Thanks to Hostinger’s WordPress Acceleration and Caching solutions','WordPress AI tools - Creating a new website has never been easier','Weekly or daily backups - Your data will always be safe','Fast and dedicated 24/7 support - Ready to help you','Migration of your current WordPress sites to Hostinger is automatic and free!','Try Premium Web Hosting now - starting from $1.99/mo'];for (var i=0;i<bulletPoints.length;i++){bulletPoints[i].innerHTML = replacement[i];}}</script>
+
+#EXTINF:-1 tvg-id="1984" group-title="JioTV English" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Sports18_1_HD.png",Sports18 1 HD
+https://sanjibweb.me/paid/smtv2/jio.m3u8?id=1984
+
+#EXTINF:-1 tvg-id="1382" group-title="SPORTS | CRICKET" tvg-logo="12065.jpg",STAR SPORTS 1 4K HINDI
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1382
+
+#EXTINF:-1 tvg-id="1391" group-title="SPORTS | CRICKET" tvg-logo="12077.png",WILLOW SPORTS 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1391
+#EXTINF:-1 tvg-id="1392" group-title="SPORTS | CRICKET" tvg-logo="12078.png",WILLOW EXTRA 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1392
+#EXTINF:-1 tvg-id="1393" group-title="SPORTS | CRICKET" tvg-logo="28020.png",FOX SPORTS
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1393
+#EXTINF:-1 tvg-id="1394" group-title="SPORTS | CRICKET" tvg-logo="57923.png",FOX SPORTS 3
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1394
+#EXTINF:-1 tvg-id="1395" group-title="SPORTS | CRICKET" tvg-logo="59451.png",ESPN CRICKET
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1395
+#EXTINF:-1 tvg-id="1396" group-title="SPORTS | CRICKET" tvg-logo="60799.jpg",JIO CRICKET HINDI
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1396
+#EXTINF:-1 tvg-id="1397" group-title="SPORTS | CRICKET" tvg-logo="60798.jpg",JIO CRICKET ENGLISH
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1397
+#EXTINF:-1 tvg-id="1398" group-title="SPORTS | CRICKET" tvg-logo="60800.jpg",JIO CRICKET 1
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1398
+#EXTINF:-1 tvg-id="1399" group-title="SPORTS | CRICKET" tvg-logo="60809.jpg",JIO CRICKET 2
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1399
+#EXTINF:-1 tvg-id="1400" group-title="SPORTS | CRICKET" tvg-logo="60802.jpg",JIO CRICKET 3
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1400
+#EXTINF:-1 tvg-id="1401" group-title="SPORTS | CRICKET" tvg-logo="60803.jpg",JIO CRICKET 4
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1401
+#EXTINF:-1 tvg-id="1402" group-title="SPORTS | CRICKET" tvg-logo="49804.png",FLOW SPORTS CRICKET
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1402
+#EXTINF:-1 tvg-id="1403" group-title="SPORTS | CRICKET" tvg-logo="62079.png",FLOW SPORTS 2 CRICKET
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1403
+#EXTINF:-1 tvg-id="1404" group-title="SPORTS | CRICKET" tvg-logo="12020.jpg",T SPORTS BANGLA
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1404
+#EXTINF:-1 tvg-id="1405" group-title="SPORTS | CRICKET" tvg-logo="12083.png",SUPER SPORTS 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1405
+#EXTINF:-1 tvg-id="1406" group-title="SPORTS | CRICKET" tvg-logo="30845.jpg",A SPORTS
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1406
+#EXTINF:-1 tvg-id="1407" group-title="SPORTS | CRICKET" tvg-logo="12088.jpg",PTV SPORTS.
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1407
+#EXTINF:-1 tvg-id="1408" group-title="SPORTS | CRICKET" tvg-logo="12082.png",TEN SPORTS
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1408
+#EXTINF:-1 tvg-id="1409" group-title="SPORTS | CRICKET" tvg-logo="2873.jpg",SKY SPORTS 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1409
+#EXTINF:-1 tvg-id="1410" group-title="SPORTS | CRICKET" tvg-logo="41869.jpg",CRICKET MAX
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1410
+#EXTINF:-1 tvg-id="1411" group-title="SPORTS | CRICKET" tvg-logo="43723.jpg",CRICKET PLUS
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1411
+#EXTINF:-1 tvg-id="1412" group-title="SPORTS | CRICKET" tvg-logo="57921.png",FOX SPORTS 505
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1412
+#EXTINF:-1 tvg-id="1413" group-title="SPORTS | CRICKET" tvg-logo="57922.jpg",FOX SPORTS 507
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1413
+#EXTINF:-1 tvg-id="1414" group-title="SPORTS | CRICKET" tvg-logo="12057.png",ASTRO CRICKET 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1414
+#EXTINF:-1 tvg-id="1415" group-title="SPORTS | CRICKET" tvg-logo="12059.png",EUROSPORTS 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1415
+#EXTINF:-1 tvg-id="1416" group-title="SPORTS | CRICKET" tvg-logo="12060.png",SONY SIX 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1416
+#EXTINF:-1 tvg-id="1417" group-title="SPORTS | CRICKET" tvg-logo="12061.jpg",SONY TEN 1 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1417
+#EXTINF:-1 tvg-id="1418" group-title="SPORTS | CRICKET" tvg-logo="12062.png",SONY TEN 2 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1418
+#EXTINF:-1 tvg-id="1419" group-title="SPORTS | CRICKET" tvg-logo="12063.png",SONY TEN 3 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1419
+#EXTINF:-1 tvg-id="1420" group-title="SPORTS | CRICKET" tvg-logo="12089.png",SONY TEN 4 4k
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1420
+#EXTINF:-1 tvg-id="1421" group-title="SPORTS | CRICKET" tvg-logo="12085.png",US WILLOW CRICKET HD
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1421
+#EXTINF:-1 tvg-id="1422" group-title="SPORTS | CRICKET" tvg-logo="12086.png",US WILLOW EXTRA HD
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1422
+#EXTINF:-1 tvg-id="1423" group-title="SPORTS | CRICKET" tvg-logo="12087.jpg",DD SPORTS.
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1423
+#EXTINF:-1 tvg-id="1424" group-title="SPORTS | CRICKET" tvg-logo="12081.jpg",PTV SPORTS RAW
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1424
+#EXTINF:-1 tvg-id="1425" group-title="SPORTS | CRICKET" tvg-logo="12080.jpg",GEO SUPER
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1425
+#EXTINF:-1 tvg-id="1426" group-title="SPORTS | CRICKET" tvg-logo="8567.png",SPORTS CA
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1426
+#EXTINF:-1 tvg-id="1427" group-title="SPORTS | CRICKET" tvg-logo="723.png",EUROSPORTS HD
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1427
+#EXTINF:-1 tvg-id="1428" group-title="SPORTS | CRICKET" tvg-logo="61253.png",SPORTS 18
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1428
+#EXTINF:-1 tvg-id="1429" group-title="SPORTS | CRICKET" tvg-logo="753.jpg",SONY TEN 1 HD
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1429
+#EXTINF:-1 tvg-id="1430" group-title="SPORTS | CRICKET" tvg-logo="537.png",SONY TEN 2 INDIA 4K
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1430
+#EXTINF:-1 tvg-id="1431" group-title="SPORTS | CRICKET" tvg-logo="538.png",SONY TEN 3 HD
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1431
+#EXTINF:-1 tvg-id="1432" group-title="SPORTS | CRICKET" tvg-logo="10432.png",WILLOW CRICKET.
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1432
+#EXTINF:-1 tvg-id="1433" group-title="SPORTS | CRICKET" tvg-logo="10433.png",WILLOW EXTRA.
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1433
+#EXTINF:-1 tvg-id="1434" group-title="SPORTS | CRICKET" tvg-logo="777.jpg",DD SPORTS
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1434
+#EXTINF:-1 tvg-id="1435" group-title="SPORTS | CRICKET" tvg-logo="998.jpg",SONY SIX HD
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1435
+#EXTINF:-1 tvg-id="1436" group-title="SPORTS | CRICKET" tvg-logo="3276.png",ASTRO CRICKET
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1436
+#EXTINF:-1 tvg-id="1437" group-title="SPORTS | CRICKET" tvg-logo="11970.png",TEN SPORTS PK PAK
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1437
+#EXTINF:-1 tvg-id="1438" group-title="SPORTS | CRICKET" tvg-logo="11950.jpg",PTV SPORTS PAK
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1438
+#EXTINF:-1 tvg-id="1439" group-title="SPORTS | CRICKET" tvg-logo="62869.jpg",FOX CRICKET
+https://sanjibweb.me/paid/smtv2/index.m3u8?id=1439
+
+#EXTINF:-1 tvg-id="" tvg-name="CRI: STAR SPORTS TELUGU 1 HD" tvg-logo="https://static.wikia.nocookie.net/logopedia/images/7/74/Star_Sports_1_Telugu_HD.png/revision/latest/scale-to-width-down/250?cb=20211017160105" group-title="CRICKET",CRI: STAR SPORTS TELUGU 1 HD
+http://livetvbox.live:8080/live/7878/7878/177843.ts
+
+#EXTINF:-1 tvg-id="" tvg-name="CRI: STAR SPORTS TELUGU 1 HD" tvg-logo="https://static.wikia.nocookie.net/logopedia/images/7/74/Star_Sports_1_Telugu_HD.png/revision/latest/scale-to-width-down/250?cb=20211017160105" group-title="CRICKET",CRI: STAR SPORTS TELUGU 1 HD
+http://starshare.live:8080/live/123456/654321/177843.ts
+
+#EXTINF:-1 tvg-id="1883" group-title="JioTV Telugu" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Pogo_Telugu.png",Pogo Telugu
+https://sanjibweb.me/paid/smtv2/jio.m3u8?id=1883
+
+#EXTINF:-1 tvg-id="127" group-title="TATA-Kids" tvg-country="IN" tvg-logo="https://ltsk-cdn.s3.eu-west-1.amazonaws.com/jumpstart/Temp_Live/cdn/HLS/Channel/imageContent-8018-j7a7n1a8-v1/imageContent-8018-j7a7n1a8-m1.png",Sonic Nickelodeon
+https://sanjibweb.me/paid/smtv2/manifest.mpd?id=127
+
+#EXTINF:-1 tvg-id="166" group-title="JioTV Telugu" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Cartoon_Network_Telugu.png",Cartoon Network Telugu
+https://sanjibweb.me/paid/smtv2/jio.m3u8?id=166
+
+#EXTINF:-1 tvg-id="543" group-title="JioTV Telugu" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Nick_Telugu.png",Nick Telugu
+https://sanjibweb.me/paid/smtv2/jio.m3u8?id=543
+
+#EXTINF:-1 tvg-id="" tvg-name="Kids: Hungama" tvg-logo="" group-title="KIDS",Kids: Hungama
+http://starshare.live:8080/live/123456/654321/18456.ts
+
+<script disable-devtool-auto="" src="https://cdn.jsdelivr.net/npm/disable-devtool@latest"></script>
+
+</body>
+
